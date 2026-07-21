@@ -1,24 +1,80 @@
 import { useState } from 'react'
 import Header from './components/Header'
 import OrderPage from './pages/OrderPage'
+import AdminPage from './pages/AdminPage'
+import { MENUS } from './data/menus'
+import { ORDER_STATUS } from './utils/orderStatus'
 import './App.css'
+
+function createInitialInventory() {
+  return MENUS.map((menu) => ({
+    menuId: menu.id,
+    menuName: menu.name,
+    stock: 10,
+  }))
+}
 
 function App() {
   const [activePage, setActivePage] = useState('order')
+  const [orders, setOrders] = useState([])
+  const [inventory, setInventory] = useState(createInitialInventory)
+  const [nextOrderId, setNextOrderId] = useState(1)
+
+  function handlePlaceOrder(cartItems) {
+    const totalAmount = cartItems.reduce(
+      (sum, item) => sum + item.unitPrice * item.quantity,
+      0,
+    )
+
+    const newOrder = {
+      id: nextOrderId,
+      orderedAt: new Date().toISOString(),
+      items: cartItems.map((item) => ({
+        menuId: item.menuId,
+        menuName: item.menuName,
+        options: item.options,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      totalAmount,
+      status: ORDER_STATUS.RECEIVED,
+    }
+
+    setOrders((prev) => [newOrder, ...prev])
+    setNextOrderId((prev) => prev + 1)
+
+    alert(`주문이 완료되었습니다.\n총 금액: ${totalAmount.toLocaleString('ko-KR')}원`)
+  }
+
+  function handleUpdateStock(menuId, delta) {
+    setInventory((prev) =>
+      prev.map((item) => {
+        if (item.menuId !== menuId) return item
+
+        const nextStock = Math.max(0, item.stock + delta)
+        return { ...item, stock: nextStock }
+      }),
+    )
+  }
+
+  function handleUpdateOrderStatus(orderId, status) {
+    setOrders((prev) =>
+      prev.map((order) => (order.id === orderId ? { ...order, status } : order)),
+    )
+  }
 
   if (activePage === 'order') {
-    return <OrderPage onNavigate={setActivePage} />
+    return <OrderPage onNavigate={setActivePage} onPlaceOrder={handlePlaceOrder} />
   }
 
   return (
-    <div className="page">
-      <Header activePage="admin" onNavigate={setActivePage} />
-      <div className="app">
-        <main className="placeholder-page">
-          <p>관리자 화면은 추후 구현 예정입니다.</p>
-        </main>
-      </div>
-    </div>
+    <AdminPage
+      onNavigate={setActivePage}
+      orders={orders}
+      inventory={inventory}
+      onUpdateStock={handleUpdateStock}
+      onUpdateOrderStatus={handleUpdateOrderStatus}
+    />
   )
 }
 

@@ -5,7 +5,7 @@ import ShoppingCart from '../components/ShoppingCart'
 import { MENUS, OPTIONS } from '../data/menus'
 import { calcUnitPrice, getCartKey } from '../utils/cart'
 
-function OrderPage({ onNavigate }) {
+function OrderPage({ onNavigate, onPlaceOrder }) {
   const [selectedOptions, setSelectedOptions] = useState({})
   const [cartItems, setCartItems] = useState([])
 
@@ -55,13 +55,7 @@ function OrderPage({ onNavigate }) {
   function handleOrder() {
     if (cartItems.length === 0) return
 
-    const totalAmount = cartItems.reduce(
-      (sum, item) => sum + item.unitPrice * item.quantity,
-      0,
-    )
-
-    // TODO: POST /orders API 연동
-    alert(`주문이 완료되었습니다.\n총 금액: ${totalAmount.toLocaleString('ko-KR')}원`)
+    onPlaceOrder(cartItems)
     setCartItems([])
   }
 
