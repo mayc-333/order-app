@@ -60,4 +60,4 @@ function OrderList({ orders, onUpdateStatus }) {
   )
 }
 
-export default OrderList
+export default O

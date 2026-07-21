@@ -488,34 +488,4 @@
   }
 
   .cart-checkout {
-    padding-left: 0;
-    padding-top: 1rem;
-  }
-
-  .dashboard-stats {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .inventory-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .order-item {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .order-item-main {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
-  }
-
-  .order-amount {
-    text-align: left;
-  }
-
-  .order-item-action {
-    display: flex;
-    justify-content: flex-end;
-  }
-}
+ 
