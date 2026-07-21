@@ -1,9 +1,18 @@
 import { OPTIONS } from '../data/menus'
 import { formatPrice } from '../utils/formatPrice'
 
-function MenuCard({ menu, selectedOptionIds, onOptionChange, onAddToCart }) {
+function MenuCard({
+  menu,
+  stock,
+  addDisabled,
+  selectedOptionIds,
+  onOptionChange,
+  onAddToCart,
+}) {
+  const isSoldOut = stock === 0
+
   return (
-    <article className="menu-card">
+    <article className={`menu-card ${isSoldOut ? 'menu-card--sold-out' : ''}`}>
       <div className="menu-image">
         <img
           src={menu.imageUrl}
@@ -16,12 +25,15 @@ function MenuCard({ menu, selectedOptionIds, onOptionChange, onAddToCart }) {
       <p className="menu-price">{formatPrice(menu.price)}</p>
       <p className="menu-description">{menu.description}</p>
 
+      {isSoldOut && <p className="menu-sold-out-label">품절</p>}
+
       <div className="menu-options">
         {OPTIONS.map((option) => (
           <label key={option.id} className="option-label">
             <input
               type="checkbox"
               checked={selectedOptionIds.includes(option.id)}
+              disabled={addDisabled}
               onChange={(event) =>
                 onOptionChange(menu.id, option.id, event.target.checked)
               }
@@ -31,8 +43,13 @@ function MenuCard({ menu, selectedOptionIds, onOptionChange, onAddToCart }) {
         ))}
       </div>
 
-      <button type="button" className="btn btn-primary btn-add" onClick={() => onAddToCart(menu.id)}>
-        담기
+      <button
+        type="button"
+        className="btn btn-primary btn-add"
+        disabled={addDisabled}
+        onClick={() => onAddToCart(menu.id)}
+      >
+        {isSoldOut ? '품절' : '담기'}
       </button>
     </article>
   )

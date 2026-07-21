@@ -9,7 +9,7 @@ function formatCartItemLabel(item) {
   return `${item.menuName}${optionText} X ${item.quantity}`
 }
 
-function ShoppingCart({ cartItems, onOrder }) {
+function ShoppingCart({ cartItems, canOrder, onOrder }) {
   const totalAmount = cartItems.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
     0,
@@ -43,7 +43,7 @@ function ShoppingCart({ cartItems, onOrder }) {
           <button
             type="button"
             className="btn btn-primary btn-order"
-            disabled={isEmpty}
+            disabled={isEmpty || !canOrder}
             onClick={onOrder}
           >
             주문하기

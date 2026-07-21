@@ -4,14 +4,6 @@ import InventorySection from '../components/admin/InventorySection'
 import OrderList from '../components/admin/OrderList'
 
 function AdminPage({ onNavigate, orders, inventory, onUpdateStock, onUpdateOrderStatus }) {
-  function handleIncrease(menuId) {
-    onUpdateStock(menuId, 1)
-  }
-
-  function handleDecrease(menuId) {
-    onUpdateStock(menuId, -1)
-  }
-
   return (
     <div className="page">
       <Header activePage="admin" onNavigate={onNavigate} />
@@ -20,8 +12,8 @@ function AdminPage({ onNavigate, orders, inventory, onUpdateStock, onUpdateOrder
         <Dashboard orders={orders} />
         <InventorySection
           inventory={inventory}
-          onIncrease={handleIncrease}
-          onDecrease={handleDecrease}
+          onIncrease={(menuId) => onUpdateStock(menuId, 1)}
+          onDecrease={(menuId) => onUpdateStock(menuId, -1)}
         />
         <OrderList orders={orders} onUpdateStatus={onUpdateOrderStatus} />
       </div>

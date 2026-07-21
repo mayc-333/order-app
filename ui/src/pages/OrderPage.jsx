@@ -4,10 +4,21 @@ import MenuCard from '../components/MenuCard'
 import ShoppingCart from '../components/ShoppingCart'
 import { MENUS, OPTIONS } from '../data/menus'
 import { calcUnitPrice, getCartKey } from '../utils/cart'
+import {
+  canAddMenuToCart,
+  getMenuStock,
+  validateCartStock,
+} from '../utils/inventory'
 
-function OrderPage({ onNavigate, onPlaceOrder }) {
+function OrderPage({
+  onNavigate,
+  inventory,
+  cartItems,
+  setCartItems,
+  onPlaceOrder,
+}) {
   const [selectedOptions, setSelectedOptions] = useState({})
-  const [cartItems, setCartItems] = useState([])
+  const cartValidation = validateCartStock(inventory, cartItems)
 
   function handleOptionChange(menuId, optionId, checked) {
     setSelectedOptions((prev) => {
@@ -21,6 +32,18 @@ function OrderPage({ onNavigate, onPlaceOrder }) {
   }
 
   function handleAddToCart(menuId) {
+    if (!canAddMenuToCart(inventory, cartItems, menuId)) {
+      const stock = getMenuStock(inventory, menuId)
+      const menu = MENUS.find((item) => item.id === menuId)
+
+      if (stock === 0) {
+        alert(`${menu?.name ?? '메뉴'}은(는) 품절 상태입니다.`)
+      } else {
+        alert(`${menu?.name ?? '메뉴'}의 재고가 부족합니다. (재고: ${stock}개)`)
+      }
+      return
+    }
+
     const menu = MENUS.find((item) => item.id === menuId)
     if (!menu) return
 
@@ -56,7 +79,6 @@ function OrderPage({ onNavigate, onPlaceOrder }) {
     if (cartItems.length === 0) return
 
     onPlaceOrder(cartItems)
-    setCartItems([])
   }
 
   return (
@@ -69,6 +91,8 @@ function OrderPage({ onNavigate, onPlaceOrder }) {
             <MenuCard
               key={menu.id}
               menu={menu}
+              stock={getMenuStock(inventory, menu.id)}
+              addDisabled={!canAddMenuToCart(inventory, cartItems, menu.id)}
               selectedOptionIds={selectedOptions[menu.id] ?? []}
               onOptionChange={handleOptionChange}
               onAddToCart={handleAddToCart}
@@ -76,7 +100,11 @@ function OrderPage({ onNavigate, onPlaceOrder }) {
           ))}
         </main>
 
-        <ShoppingCart cartItems={cartItems} onOrder={handleOrder} />
+        <ShoppingCart
+          cartItems={cartItems}
+          canOrder={cartValidation.valid}
+          onOrder={handleOrder}
+        />
       </div>
     </div>
   )

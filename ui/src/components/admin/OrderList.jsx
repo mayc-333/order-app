@@ -38,7 +38,10 @@ function OrderList({ orders, onUpdateStatus }) {
                 </div>
 
                 <div className="order-item-action">
-                  {actionLabel ? (
+                  <span className={`order-status-badge order-status-badge--${order.status}`}>
+                    {ORDER_STATUS_LABEL[order.status]}
+                  </span>
+                  {actionLabel && (
                     <button
                       type="button"
                       className="btn btn-primary btn-status"
@@ -46,10 +49,6 @@ function OrderList({ orders, onUpdateStatus }) {
                     >
                       {actionLabel}
                     </button>
-                  ) : (
-                    <span className="order-status-badge">
-                      {ORDER_STATUS_LABEL[order.status]}
-                    </span>
                   )}
                 </div>
               </li>
