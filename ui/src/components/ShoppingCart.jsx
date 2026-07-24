@@ -9,7 +9,7 @@ function formatCartItemLabel(item) {
   return `${item.menuName}${optionText} X ${item.quantity}`
 }
 
-function ShoppingCart({ cartItems, canOrder, onOrder }) {
+function ShoppingCart({ cartItems, canOrder = true, onOrder }) {
   const totalAmount = cartItems.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
     0,

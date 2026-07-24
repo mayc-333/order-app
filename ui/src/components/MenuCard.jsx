@@ -1,6 +1,10 @@
 import { OPTIONS } from '../data/menus'
 import { formatPrice } from '../utils/formatPrice'
 
+function formatOptionPrice(price) {
+  return price > 0 ? `+${formatPrice(price)}` : '+0원'
+}
+
 function MenuCard({
   menu,
   stock,
@@ -38,7 +42,7 @@ function MenuCard({
                 onOptionChange(menu.id, option.id, event.target.checked)
               }
             />
-            {option.name} ({option.price > 0 ? `+${formatPrice(option.price)}` : '+0원'})
+            {option.name} ({formatOptionPrice(option.price)})
           </label>
         ))}
       </div>

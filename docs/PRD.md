@@ -469,7 +469,420 @@
 
 - 관리자 로그인·권한 인증
 - 주문 상태 되돌리기 (취소, 환불)
-- 재고 자동 차감 (주문 시 재고 연동 — 추후 확장 가능)
 - 주문 검색·필터·페이지네이션
 - 주문 알림 (소리, 푸시 등)
 - 매출 통계·리포트
+
+> 재고 자동 차감은 프런트엔드 단독 개발 시 범위 외였으나, **6. 백엔드** 구현 시 주문 생성과 함께 처리한다.
+
+---
+
+## 6. 백엔드
+
+### 6.1 개요
+
+Express + PostgreSQL 기반 REST API 서버를 구축한다. 프런트엔드(주문하기·관리자 화면)와 데이터베이스를 연결하며, 메뉴 조회, 주문 저장, 재고 관리, 주문 상태 변경 기능을 제공한다.
+
+| 항목 | 내용 |
+|------|------|
+| 런타임 | Node.js |
+| 프레임워크 | Express |
+| 데이터베이스 | PostgreSQL |
+| API 형식 | REST (JSON) |
+| 인증 | 없음 (학습 목적) |
+
+### 6.2 데이터 모델
+
+#### 6.2.1 ERD 개요
+
+```
+Menus (1) ──< (N) Options
+  │
+  │ (1)
+  │
+  └──< (N) OrderItems >── (N) OrderItemOptions >── Options
+              │
+              │ (N)
+              │
+            Orders (1)
+```
+
+#### 6.2.2 Menus (메뉴)
+
+커피 메뉴 정보와 재고를 관리한다.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | SERIAL (PK) | 메뉴 ID |
+| name | VARCHAR | 커피 이름 (예: 아메리카노(ICE)) |
+| description | TEXT | 메뉴 설명 |
+| price | INTEGER | 기본 가격 (원) |
+| image_url | VARCHAR | 이미지 URL 또는 경로 |
+| stock | INTEGER | 재고 수량 (기본 0 이상) |
+| created_at | TIMESTAMP | 생성 일시 |
+| updated_at | TIMESTAMP | 수정 일시 |
+
+**비고**
+- 주문하기 화면 API 응답에는 `name`, `description`, `price`, `image_url`, `options`를 포함한다.
+- `stock`은 **관리자 화면** 재고 현황 API에서 조회·수정한다.
+
+#### 6.2.3 Options (옵션)
+
+메뉴에 연결되는 추가 옵션이다.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | SERIAL (PK) | 옵션 ID |
+| menu_id | INTEGER (FK) | 연결할 메뉴 ID (`menus.id`) |
+| name | VARCHAR | 옵션 이름 (예: 샷 추가) |
+| price | INTEGER | 옵션 추가 가격 (원) |
+| created_at | TIMESTAMP | 생성 일시 |
+
+**관계**
+- 하나의 메뉴(Menus)는 여러 옵션(Options)을 가질 수 있다.
+- 동일 옵션명(예: 샷 추가)은 메뉴마다 별도 행으로 저장한다.
+
+#### 6.2.4 Orders (주문)
+
+고객 주문 정보를 저장한다.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | SERIAL (PK) | 주문 ID |
+| ordered_at | TIMESTAMP | 주문 일시 |
+| total_amount | INTEGER | 주문 총 금액 (원) |
+| status | VARCHAR | 주문 상태 (`received`, `preparing`, `completed`) |
+| created_at | TIMESTAMP | 생성 일시 |
+| updated_at | TIMESTAMP | 수정 일시 |
+
+**status 값**
+
+| DB 값 | 화면 표시 | 설명 |
+|-------|-----------|------|
+| `received` | 주문 접수 | 주문 생성 시 기본값 |
+| `preparing` | 제조 중 | 관리자가 제조 시작 |
+| `completed` | 제조 완료 | 관리자가 제조 완료 |
+
+#### 6.2.5 OrderItems (주문 항목)
+
+주문에 포함된 메뉴 단위 정보이다. 주문 시점의 메뉴명·가격을 스냅샷으로 저장한다.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | SERIAL (PK) | 주문 항목 ID |
+| order_id | INTEGER (FK) | 주문 ID (`orders.id`) |
+| menu_id | INTEGER (FK) | 메뉴 ID (`menus.id`) |
+| menu_name | VARCHAR | 주문 시점 메뉴명 |
+| quantity | INTEGER | 수량 |
+| unit_price | INTEGER | 항목 단가 (기본가 + 옵션가 합계, 원) |
+| line_amount | INTEGER | 줄 금액 (`unit_price × quantity`, 원) |
+
+#### 6.2.6 OrderItemOptions (주문 항목 옵션)
+
+주문 항목에 선택된 옵션을 저장한다.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | SERIAL (PK) | ID |
+| order_item_id | INTEGER (FK) | 주문 항목 ID (`order_items.id`) |
+| option_id | INTEGER (FK) | 옵션 ID (`options.id`) |
+| option_name | VARCHAR | 주문 시점 옵션명 |
+| option_price | INTEGER | 주문 시점 옵션 가격 (원) |
+
+#### 6.2.7 초기 시드 데이터
+
+**Menus**
+
+| name | price | stock | description |
+|------|-------|-------|-------------|
+| 아메리카노(ICE) | 4000 | 10 | 시원하고 깔끔한 아이스 아메리카노 |
+| 아메리카노(HOT) | 4000 | 10 | 진한 에스presso의 깊은 풍미 |
+| 카페라떼 | 5000 | 10 | 부드러운 우유와 에스presso의 조화 |
+
+**Options** (각 메뉴마다 동일 옵션 2종 연결)
+
+| name | price |
+|------|-------|
+| 샷 추가 | 500 |
+| 시럽 추가 | 0 |
+
+### 6.3 데이터 스키마 사용자 흐름
+
+#### 흐름 1: 메뉴 조회 및 화면 표시
+
+1. 사용자가 **주문하기** 화면에 진입한다.
+2. 프런트엔드가 `GET /api/menus`를 호출한다.
+3. 서버는 `Menus`와 연결된 `Options`를 조회해 반환한다.
+4. 프런트엔드는 메뉴 이름, 설명, 가격, 이미지, 옵션을 주문 화면에 표시한다.
+5. `Menus.stock`은 주문 화면에 노출하지 않으며, **관리자 화면** `GET /api/admin/inventory`에서 조회한다.
+
+#### 흐름 2: 장바구니 (클라이언트)
+
+1. 사용자가 메뉴와 옵션을 선택해 **담기**를 클릭한다.
+2. 선택 정보는 프런트엔드 장바구니 상태에 저장한다. (DB 저장 없음)
+3. 장바구니 UI에 메뉴, 옵션, 수량, 금액을 표시한다.
+
+#### 흐름 3: 주문 생성
+
+1. 사용자가 장바구니에서 **주문하기**를 클릭한다.
+2. 프런트엔드가 `POST /api/orders`로 주문 정보를 전송한다.
+3. 서버는 아래를 **트랜잭션**으로 처리한다.
+   - 재고 부족 여부 검증
+   - `Orders` 레코드 생성 (`status = received`, `ordered_at = 현재 시각`)
+   - `OrderItems`, `OrderItemOptions` 레코드 생성
+   - 주문 수량만큼 `Menus.stock` 차감
+4. 성공 시 생성된 주문 ID와 주문 정보를 반환한다.
+5. 프런트엔드는 장바구니를 비우고 완료 안내를 표시한다.
+
+#### 흐름 4: 관리자 주문·재고 관리
+
+1. 관리자 화면 진입 시 `GET /api/admin/orders`, `GET /api/admin/inventory`, `GET /api/admin/dashboard`를 호출한다.
+2. `Orders` 데이터를 **주문 현황**에 표시한다. (주문 일시, 메뉴, 옵션, 수량, 금액, 상태)
+3. 관리자가 **제조 시작** 클릭 → `PATCH /api/admin/orders/:orderId/status` → `preparing`
+4. 관리자가 **제조 완료** 클릭 → `PATCH /api/admin/orders/:orderId/status` → `completed`
+5. 재고 **+** / **−** 클릭 → `PATCH /api/admin/inventory/:menuId` → `Menus.stock` 수정
+
+**상태 전이**
+
+```
+주문 접수(received)  →  제조 중(preparing)  →  제조 완료(completed)
+```
+
+### 6.4 API 설계
+
+Base URL: `http://localhost:3000/api` (개발 환경)
+
+#### 6.4.1 주문하기 관련 API
+
+##### `GET /api/menus`
+
+주문하기 화면 진입 시 커피 메뉴 목록을 조회한다.
+
+**응답 예시**
+```json
+[
+  {
+    "id": 1,
+    "name": "아메리카노(ICE)",
+    "description": "시원하고 깔끔한 아이스 아메리카노",
+    "price": 4000,
+    "imageUrl": "/images/americano-ice.jpg",
+    "options": [
+      { "id": 1, "name": "샷 추가", "price": 500 },
+      { "id": 2, "name": "시럽 추가", "price": 0 }
+    ]
+  }
+]
+```
+
+**비고**: 응답에 `stock` 포함하지 않음.
+
+##### `POST /api/orders`
+
+사용자가 **주문하기** 버튼을 클릭하면 주문을 저장하고 재고를 차감한다.
+
+**요청 예시**
+```json
+{
+  "items": [
+    {
+      "menuId": 1,
+      "quantity": 1,
+      "optionIds": [1]
+    },
+    {
+      "menuId": 2,
+      "quantity": 2,
+      "optionIds": []
+    }
+  ]
+}
+```
+
+**처리 로직**
+1. 각 `menuId`별 주문 수량 합산
+2. `Menus.stock`과 비교해 재고 부족 시 `400` 오류 반환
+3. 서버에서 `unit_price` 계산 (메뉴 기본가 + 옵션가)
+4. `Orders`, `OrderItems`, `OrderItemOptions` 저장
+5. `Menus.stock`에서 주문 수량만큼 차감
+
+**응답 예시 (201 Created)**
+```json
+{
+  "orderId": 1,
+  "orderedAt": "2025-07-31T13:00:00.000Z",
+  "totalAmount": 12500,
+  "status": "received",
+  "items": [
+    {
+      "menuId": 1,
+      "menuName": "아메리카노(ICE)",
+      "options": [{ "name": "샷 추가", "price": 500 }],
+      "quantity": 1,
+      "unitPrice": 4500,
+      "lineAmount": 4500
+    }
+  ]
+}
+```
+
+##### `GET /api/orders/:orderId`
+
+주문 ID로 해당 주문 상세 정보를 조회한다.
+
+**응답 예시**
+```json
+{
+  "orderId": 1,
+  "orderedAt": "2025-07-31T13:00:00.000Z",
+  "totalAmount": 4000,
+  "status": "received",
+  "items": [
+    {
+      "menuId": 1,
+      "menuName": "아메리카노(ICE)",
+      "options": [],
+      "quantity": 1,
+      "unitPrice": 4000,
+      "lineAmount": 4000
+    }
+  ]
+}
+```
+
+**오류**
+- 존재하지 않는 ID → `404 Not Found`
+
+#### 6.4.2 관리자 API
+
+##### `GET /api/admin/dashboard`
+
+주문 상태별 집계를 반환한다.
+
+**응답 예시**
+```json
+{
+  "total": 5,
+  "received": 2,
+  "preparing": 1,
+  "completed": 2
+}
+```
+
+##### `GET /api/admin/inventory`
+
+메뉴별 재고 목록을 반환한다.
+
+**응답 예시**
+```json
+[
+  { "menuId": 1, "menuName": "아메리카노(ICE)", "stock": 10 },
+  { "menuId": 2, "menuName": "아메리카노(HOT)", "stock": 8 },
+  { "menuId": 3, "menuName": "카페라떼", "stock": 0 }
+]
+```
+
+##### `PATCH /api/admin/inventory/:menuId`
+
+관리자가 재고를 수동 조정한다.
+
+**요청 예시**
+```json
+{
+  "stock": 11
+}
+```
+
+**규칙**
+- `stock`은 0 이상 정수만 허용
+
+##### `GET /api/admin/orders`
+
+주문 목록을 최신순으로 반환한다.
+
+**응답 예시**
+```json
+[
+  {
+    "orderId": 1,
+    "orderedAt": "2025-07-31T13:00:00.000Z",
+    "totalAmount": 4000,
+    "status": "received",
+    "items": [
+      {
+        "menuName": "아메리카노(ICE)",
+        "options": ["샷 추가"],
+        "quantity": 1,
+        "unitPrice": 4500
+      }
+    ]
+  }
+]
+```
+
+##### `PATCH /api/admin/orders/:orderId/status`
+
+주문 상태를 변경한다.
+
+**요청 예시**
+```json
+{
+  "status": "preparing"
+}
+```
+
+**허용 전이**
+
+| 현재 상태 | 요청 가능 값 |
+|-----------|--------------|
+| `received` | `preparing` |
+| `preparing` | `completed` |
+| `completed` | (변경 불가) |
+
+**오류**
+- 잘못된 상태 전이 → `400 Bad Request`
+
+### 6.5 비즈니스 규칙
+
+| 규칙 | 설명 |
+|------|------|
+| 재고 차감 | `POST /api/orders` 성공 시 해당 메뉴 `stock`에서 주문 수량 차감 |
+| 재고 검증 | 주문 시 `stock < 주문 수량`이면 주문 거부 |
+| 가격 계산 | `unit_price = menu.price + sum(option.price)` (서버에서 계산) |
+| 주문 기본 상태 | 신규 주문은 항상 `received` (주문 접수) |
+| 상태 변경 | `received → preparing → completed` 단방향만 허용 |
+| 트랜잭션 | 주문 저장 + 재고 차감은 하나의 DB 트랜잭션으로 처리 |
+
+### 6.6 공통 응답·오류
+
+**성공**
+- `200 OK` — 조회·수정 성공
+- `201 Created` — 주문 생성 성공
+
+**오류 형식**
+```json
+{
+  "error": "재고가 부족합니다.",
+  "code": "INSUFFICIENT_STOCK"
+}
+```
+
+| HTTP 코드 | 상황 |
+|-----------|------|
+| 400 | 잘못된 요청, 재고 부족, 잘못된 상태 전이 |
+| 404 | 메뉴·주문 미존재 |
+| 500 | 서버 내부 오류 |
+
+### 6.7 CORS
+
+- 프런트엔드(`http://localhost:5173`)에서 API 호출을 허용한다.
+- Express `cors` 미들웨어 사용.
+
+### 6.8 범위 외 (Out of Scope)
+
+- 사용자 인증·권한 (JWT, 세션 등)
+- 결제 PG 연동
+- 이미지 파일 업로드 API (초기에는 URL/시드 경로 사용)
+- 주문 취소·환불
+- 페이지네이션·검색
+- WebSocket 실시간 알림
