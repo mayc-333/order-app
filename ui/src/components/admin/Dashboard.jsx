@@ -1,11 +1,4 @@
-function Dashboard({ orders }) {
-  const stats = {
-    total: orders.length,
-    received: orders.filter((order) => order.status === 'received').length,
-    preparing: orders.filter((order) => order.status === 'preparing').length,
-    completed: orders.filter((order) => order.status === 'completed').length,
-  }
-
+function Dashboard({ stats }) {
   return (
     <section className="admin-section">
       <h2 className="admin-section-title">관리자 대시보드</h2>

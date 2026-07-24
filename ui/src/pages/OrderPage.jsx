@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Header from '../components/Header'
 import MenuCard from '../components/MenuCard'
 import ShoppingCart from '../components/ShoppingCart'
-import { MENUS, OPTIONS } from '../data/menus'
 import { calcUnitPrice, getCartKey } from '../utils/cart'
 import {
   canAddMenuToCart,
@@ -12,6 +11,7 @@ import {
 
 function OrderPage({
   onNavigate,
+  menus,
   inventory,
   cartItems,
   setCartItems,
@@ -34,7 +34,7 @@ function OrderPage({
   function handleAddToCart(menuId) {
     if (!canAddMenuToCart(inventory, cartItems, menuId)) {
       const stock = getMenuStock(inventory, menuId)
-      const menu = MENUS.find((item) => item.id === menuId)
+      const menu = menus.find((item) => item.id === menuId)
 
       if (stock === 0) {
         alert(`${menu?.name ?? '메뉴'}은(는) 품절 상태입니다.`)
@@ -44,11 +44,11 @@ function OrderPage({
       return
     }
 
-    const menu = MENUS.find((item) => item.id === menuId)
+    const menu = menus.find((item) => item.id === menuId)
     if (!menu) return
 
     const optionIds = [...(selectedOptions[menuId] ?? [])].sort()
-    const options = OPTIONS.filter((option) => optionIds.includes(option.id))
+    const options = menu.options.filter((option) => optionIds.includes(option.id))
     const unitPrice = calcUnitPrice(menu.price, options)
     const key = getCartKey(menuId, optionIds)
 
@@ -87,7 +87,7 @@ function OrderPage({
 
       <div className="app">
         <main className="menu-grid">
-          {MENUS.map((menu) => (
+          {menus.map((menu) => (
             <MenuCard
               key={menu.id}
               menu={menu}

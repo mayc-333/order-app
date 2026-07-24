@@ -1,4 +1,3 @@
-import { OPTIONS } from '../data/menus'
 import { formatPrice } from '../utils/formatPrice'
 
 function formatOptionPrice(price) {
@@ -32,7 +31,7 @@ function MenuCard({
       {isSoldOut && <p className="menu-sold-out-label">품절</p>}
 
       <div className="menu-options">
-        {OPTIONS.map((option) => (
+        {menu.options.map((option) => (
           <label key={option.id} className="option-label">
             <input
               type="checkbox"

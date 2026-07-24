@@ -11,7 +11,9 @@ export function formatOrderDate(date) {
 export function formatOrderItem(item) {
   const optionText =
     item.options.length > 0
-      ? ` (${item.options.map((option) => option.name).join(', ')})`
+      ? ` (${item.options
+          .map((option) => (typeof option === 'string' ? option : option.name))
+          .join(', ')})`
       : ''
 
   return `${item.menuName}${optionText} x ${item.quantity}`

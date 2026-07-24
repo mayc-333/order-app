@@ -1,75 +1,151 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import OrderPage from './pages/OrderPage'
 import AdminPage from './pages/AdminPage'
-import { MENUS } from './data/menus'
-import { ORDER_STATUS } from './utils/orderStatus'
-import { validateCartStock } from './utils/inventory'
+import { api } from './api/client'
+import { resolveMenuImage } from './utils/menuImages'
 import './App.css'
 
-function createInitialInventory() {
-  return MENUS.map((menu) => ({
-    menuId: menu.id,
-    menuName: menu.name,
-    stock: 10,
-  }))
+function normalizeOrder(order) {
+  return {
+    id: order.orderId,
+    orderedAt: order.orderedAt,
+    totalAmount: order.totalAmount,
+    status: order.status,
+    items: order.items,
+  }
 }
 
 function App() {
   const [activePage, setActivePage] = useState('order')
+  const [menus, setMenus] = useState([])
   const [orders, setOrders] = useState([])
-  const [inventory, setInventory] = useState(createInitialInventory)
+  const [inventory, setInventory] = useState([])
+  const [dashboard, setDashboard] = useState({
+    total: 0,
+    received: 0,
+    preparing: 0,
+    completed: 0,
+  })
   const [cartItems, setCartItems] = useState([])
-  const [nextOrderId, setNextOrderId] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  function handlePlaceOrder(items) {
-    const validation = validateCartStock(inventory, items)
+  const loadOrderPageData = useCallback(async () => {
+    const [menusData, inventoryData] = await Promise.all([
+      api.getMenus(),
+      api.getInventory(),
+    ])
 
-    if (!validation.valid) {
-      alert(validation.message)
-      return
+    setMenus(
+      menusData.map((menu) => ({
+        ...menu,
+        imageUrl: resolveMenuImage(menu.imageUrl),
+      })),
+    )
+    setInventory(inventoryData)
+  }, [])
+
+  const loadAdminPageData = useCallback(async () => {
+    const [ordersData, inventoryData, dashboardData] = await Promise.all([
+      api.getOrders(),
+      api.getInventory(),
+      api.getDashboard(),
+    ])
+
+    setOrders(ordersData.map(normalizeOrder))
+    setInventory(inventoryData)
+    setDashboard(dashboardData)
+  }, [])
+
+  useEffect(() => {
+    async function init() {
+      try {
+        setLoading(true)
+        setError(null)
+        await loadOrderPageData()
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    const totalAmount = items.reduce(
-      (sum, item) => sum + item.unitPrice * item.quantity,
-      0,
-    )
+    init()
+  }, [loadOrderPageData])
 
-    setOrders((prev) => [
-      {
-        id: nextOrderId,
-        orderedAt: new Date().toISOString(),
-        items: items.map((item) => ({
-          menuId: item.menuId,
-          menuName: item.menuName,
-          options: item.options,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-        })),
-        totalAmount,
-        status: ORDER_STATUS.RECEIVED,
-      },
-      ...prev,
-    ])
-    setNextOrderId((prev) => prev + 1)
-    setCartItems([])
+  useEffect(() => {
+    if (activePage !== 'admin') return
 
-    alert(`주문이 완료되었습니다.\n총 금액: ${totalAmount.toLocaleString('ko-KR')}원`)
+    async function loadAdmin() {
+      try {
+        setError(null)
+        await loadAdminPageData()
+      } catch (err) {
+        setError(err.message)
+      }
+    }
+
+    loadAdmin()
+  }, [activePage, loadAdminPageData])
+
+  async function handlePlaceOrder(items) {
+    try {
+      const payload = items.map((item) => ({
+        menuId: item.menuId,
+        quantity: item.quantity,
+        optionIds: item.options.map((option) => option.id),
+      }))
+
+      const order = await api.createOrder(payload)
+      await loadOrderPageData()
+      setCartItems([])
+
+      alert(
+        `주문이 완료되었습니다.\n총 금액: ${order.totalAmount.toLocaleString('ko-KR')}원`,
+      )
+    } catch (err) {
+      alert(err.message)
+    }
   }
 
-  function handleUpdateStock(menuId, delta) {
-    setInventory((prev) =>
-      prev.map((item) => {
-        if (item.menuId !== menuId) return item
+  async function handleUpdateStock(menuId, delta) {
+    const current = inventory.find((item) => item.menuId === menuId)
+    if (!current) return
 
-        const nextStock = Math.max(0, item.stock + delta)
-        return { ...item, stock: nextStock }
-      }),
+    const nextStock = Math.max(0, current.stock + delta)
+
+    try {
+      const updated = await api.updateInventory(menuId, nextStock)
+      setInventory((prev) =>
+        prev.map((item) => (item.menuId === menuId ? updated : item)),
+      )
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  async function handleUpdateOrderStatus(orderId, status) {
+    try {
+      await api.updateOrderStatus(orderId, status)
+      await loadAdminPageData()
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="page">
+        <p className="loading-message">로딩 중...</p>
+      </div>
     )
   }
 
-  function handleUpdateOrderStatus(orderId, status) {
-    setOrders((prev) =>
-      prev.map((order) => (order.id === orderId ? { ...order, status } : order)),
+  if (error && menus.length === 0) {
+    return (
+      <div className="page">
+        <p className="error-message">{error}</p>
+      </div>
     )
   }
 
@@ -77,6 +153,7 @@ function App() {
     return (
       <OrderPage
         onNavigate={setActivePage}
+        menus={menus}
         inventory={inventory}
         cartItems={cartItems}
         setCartItems={setCartItems}
@@ -90,6 +167,7 @@ function App() {
       onNavigate={setActivePage}
       orders={orders}
       inventory={inventory}
+      dashboard={dashboard}
       onUpdateStock={handleUpdateStock}
       onUpdateOrderStatus={handleUpdateOrderStatus}
     />

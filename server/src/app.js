@@ -1,6 +1,10 @@
 import express from 'express'
 import cors from 'cors'
 import { testConnection } from './db/pool.js'
+import menusRouter from './routes/menus.js'
+import ordersRouter from './routes/orders.js'
+import adminRouter from './routes/admin.js'
+import { errorHandler } from './middleware/errorHandler.js'
 
 export function createApp() {
   const app = express()
@@ -21,6 +25,9 @@ export function createApp() {
       frontend: corsOrigin,
       endpoints: {
         health: '/api/health',
+        menus: '/api/menus',
+        orders: '/api/orders',
+        admin: '/api/admin',
       },
     })
   })
@@ -44,6 +51,12 @@ export function createApp() {
       })
     }
   })
+
+  app.use('/api/menus', menusRouter)
+  app.use('/api/orders', ordersRouter)
+  app.use('/api/admin', adminRouter)
+
+  app.use(errorHandler)
 
   return app
 }
