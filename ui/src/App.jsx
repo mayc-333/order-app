@@ -25,6 +25,9 @@ function App() {
     received: 0,
     preparing: 0,
     completed: 0,
+    todayCupsSold: 0,
+    yesterdayCupsSold: 0,
+    todayDate: new Date().toISOString(),
   })
   const [cartItems, setCartItems] = useState([])
   const [loading, setLoading] = useState(true)

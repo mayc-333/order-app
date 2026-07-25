@@ -1,4 +1,5 @@
 import { formatPrice } from '../utils/formatPrice'
+import { getQuantityOptions } from '../utils/inventory'
 
 function formatCartItemLabel(item) {
   const optionText =
@@ -6,10 +7,16 @@ function formatCartItemLabel(item) {
       ? ` (${item.options.map((option) => option.name).join(', ')})`
       : ''
 
-  return `${item.menuName}${optionText} X ${item.quantity}`
+  return `${item.menuName}${optionText}`
 }
 
-function ShoppingCart({ cartItems, canOrder = true, onOrder }) {
+function ShoppingCart({
+  cartItems,
+  inventory,
+  canOrder = true,
+  onQuantityChange,
+  onOrder,
+}) {
   const totalAmount = cartItems.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
     0,
@@ -26,14 +33,32 @@ function ShoppingCart({ cartItems, canOrder = true, onOrder }) {
             <p className="cart-empty">장바구니가 비어 있습니다</p>
           ) : (
             <ul className="cart-items">
-              {cartItems.map((item) => (
-                <li key={item.key} className="cart-item">
-                  <span className="cart-item-name">{formatCartItemLabel(item)}</span>
-                  <span className="cart-item-price">
-                    {formatPrice(item.unitPrice * item.quantity)}
-                  </span>
-                </li>
-              ))}
+              {cartItems.map((item) => {
+                const quantityOptions = getQuantityOptions(inventory, cartItems, item)
+
+                return (
+                  <li key={item.key} className="cart-item">
+                    <span className="cart-item-name">{formatCartItemLabel(item)}</span>
+                    <select
+                      className="cart-item-quantity"
+                      value={item.quantity}
+                      aria-label={`${item.menuName} 수량`}
+                      onChange={(event) =>
+                        onQuantityChange(item.key, Number(event.target.value))
+                      }
+                    >
+                      {quantityOptions.map((quantity) => (
+                        <option key={quantity} value={quantity}>
+                          {quantity}개
+                        </option>
+                      ))}
+                    </select>
+                    <span className="cart-item-price">
+                      {formatPrice(item.unitPrice * item.quantity)}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>

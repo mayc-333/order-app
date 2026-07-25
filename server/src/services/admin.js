@@ -3,20 +3,36 @@ import { AppError } from '../utils/errors.js'
 import { buildOrderResponse } from './orderHelpers.js'
 
 export async function getDashboardStats() {
-  const result = await pool.query(`
-    SELECT status, COUNT(*)::INT AS count
-    FROM orders
-    GROUP BY status
-  `)
+  const [statusResult, salesResult] = await Promise.all([
+    pool.query(`
+      SELECT status, COUNT(*)::INT AS count
+      FROM orders
+      GROUP BY status
+    `),
+    pool.query(`
+      SELECT
+        COALESCE(SUM(CASE WHEN o.ordered_at::date = CURRENT_DATE THEN oi.quantity END), 0)::INT AS "todayCupsSold",
+        COALESCE(SUM(CASE WHEN o.ordered_at::date = CURRENT_DATE - INTERVAL '1 day' THEN oi.quantity END), 0)::INT AS "yesterdayCupsSold",
+        TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD') AS "todayDate"
+      FROM order_items oi
+      INNER JOIN orders o ON o.id = oi.order_id
+      WHERE o.ordered_at::date >= CURRENT_DATE - INTERVAL '1 day'
+    `),
+  ])
+
+  const salesRow = salesResult.rows[0]
 
   const stats = {
     total: 0,
     received: 0,
     preparing: 0,
     completed: 0,
+    todayCupsSold: salesRow.todayCupsSold,
+    yesterdayCupsSold: salesRow.yesterdayCupsSold,
+    todayDate: salesRow.todayDate,
   }
 
-  for (const row of result.rows) {
+  for (const row of statusResult.rows) {
     stats[row.status] = row.count
     stats.total += row.count
   }

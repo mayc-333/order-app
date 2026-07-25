@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Header from '../components/Header'
 import MenuCard from '../components/MenuCard'
 import ShoppingCart from '../components/ShoppingCart'
 import { calcUnitPrice, getCartKey } from '../utils/cart'
 import {
   canAddMenuToCart,
+  getMaxQuantityForCartItem,
   getMenuStock,
   validateCartStock,
 } from '../utils/inventory'
@@ -19,6 +20,12 @@ function OrderPage({
 }) {
   const [selectedOptions, setSelectedOptions] = useState({})
   const cartValidation = validateCartStock(inventory, cartItems)
+
+  useEffect(() => {
+    if (cartItems.length === 0) {
+      setSelectedOptions({})
+    }
+  }, [cartItems])
 
   function handleOptionChange(menuId, optionId, checked) {
     setSelectedOptions((prev) => {
@@ -75,6 +82,22 @@ function OrderPage({
     })
   }
 
+  function handleQuantityChange(cartKey, quantity) {
+    const maxQuantity = getMaxQuantityForCartItem(inventory, cartItems, cartKey)
+    const nextQuantity = Math.min(Math.max(1, quantity), maxQuantity)
+
+    if (maxQuantity === 0) {
+      setCartItems((prev) => prev.filter((item) => item.key !== cartKey))
+      return
+    }
+
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.key === cartKey ? { ...item, quantity: nextQuantity } : item,
+      ),
+    )
+  }
+
   function handleOrder() {
     if (cartItems.length === 0) return
 
@@ -102,7 +125,9 @@ function OrderPage({
 
         <ShoppingCart
           cartItems={cartItems}
+          inventory={inventory}
           canOrder={cartValidation.valid}
+          onQuantityChange={handleQuantityChange}
           onOrder={handleOrder}
         />
       </div>

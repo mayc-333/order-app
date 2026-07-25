@@ -15,6 +15,25 @@ export function canAddMenuToCart(inventory, cartItems, menuId) {
   return stock > 0 && inCart < stock
 }
 
+export function getMaxQuantityForCartItem(inventory, cartItems, cartKey) {
+  const item = cartItems.find((cartItem) => cartItem.key === cartKey)
+  if (!item) return 0
+
+  const stock = getMenuStock(inventory, item.menuId)
+  const otherQuantity = cartItems
+    .filter((cartItem) => cartItem.menuId === item.menuId && cartItem.key !== cartKey)
+    .reduce((sum, cartItem) => sum + cartItem.quantity, 0)
+
+  return Math.max(0, stock - otherQuantity)
+}
+
+export function getQuantityOptions(inventory, cartItems, item) {
+  const maxQuantity = getMaxQuantityForCartItem(inventory, cartItems, item.key)
+  const limit = Math.max(1, maxQuantity)
+
+  return Array.from({ length: limit }, (_, index) => index + 1)
+}
+
 export function validateCartStock(inventory, cartItems) {
   const requiredByMenu = cartItems.reduce((acc, item) => {
     acc[item.menuId] = (acc[item.menuId] ?? 0) + item.quantity
