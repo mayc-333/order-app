@@ -7,6 +7,14 @@ import { pool } from '../src/db/pool.js'
 const { Client } = pg
 
 async function ensureDatabaseExists() {
+  const host = process.env.DB_HOST ?? ''
+  const databaseUrl = process.env.DATABASE_URL ?? ''
+
+  if (host.includes('render.com') || databaseUrl.includes('render.com')) {
+    console.log('Managed PostgreSQL detected: skipping database creation')
+    return
+  }
+
   const dbName = process.env.DB_NAME
 
   if (!dbName) {
